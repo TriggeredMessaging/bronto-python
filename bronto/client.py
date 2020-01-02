@@ -6,6 +6,7 @@ from suds import WebFault
 
 API_ENDPOINT = 'https://api.bronto.com/v4?wsdl'
 
+
 class BrontoException(Exception):
     def __init__(self, message, code=None):
         # try extract the status code with regex
@@ -19,12 +20,10 @@ class BrontoException(Exception):
         self.code = code
 
 
-
-
 class Client(object):
     _valid_contact_fields = ['email', 'mobileNumber', 'status', 'msgPref',
                              'source', 'customSource', 'listIds', 'fields',
-                             'SMSKeywordIDs',] #'first_name', 'last_name', 'cart_html']
+                             'SMSKeywordIDs', ]  # 'first_name', 'last_name', 'cart_html']
 
     _valid_order_fields = ['id', 'email', 'contactId', 'products', 'orderDate',
                            'tid']
@@ -33,9 +32,9 @@ class Client(object):
     _valid_field_fields = ['id', 'name', 'label', 'type', 'visibility', 'options']
     _valid_list_fields = ['id', 'name', 'label']
     _valid_delivery_fields = ['authentication', 'fatigueOverride', 'fields',
-            'fromEmail', 'fromName', 'messageId', 'messageRuleId', 'optin',
-            'recipients', 'remail', 'replyEmail', 'replyTracking', 'start',
-            'throttle', 'type']
+                              'fromEmail', 'fromName', 'messageId', 'messageRuleId', 'optin',
+                              'recipients', 'remail', 'replyEmail', 'replyTracking', 'start',
+                              'throttle', 'type']
 
     _cached_fields = {}
     _cached_all_fields = False
@@ -97,7 +96,6 @@ class Client(object):
             if not any([contact.get('email'), contact.get('mobileNumber')]):
                 raise ValueError('Must provide either an email or mobileNumber')
             contact_obj = self._client.factory.create('contactObject')
-            # FIXME: Add special handling for listIds, SMSKeywordIDs
             for field, value in six.iteritems(contact):
                 if field == 'fields':
                     field_objs = self._construct_contact_fields(value)
@@ -177,11 +175,11 @@ class Client(object):
             field_objs = self.get_fields(fields)
             field_ids = [x.id for x in field_objs]
             response = self._client.service.readContacts(
-                                             contact_filter,
-                                             includeLists=include_lists,
-                                             fields=field_ids,
-                                             pageNumber=page_number,
-                                             includeSMSKeywords=include_sms)
+                contact_filter,
+                includeLists=include_lists,
+                fields=field_ids,
+                pageNumber=page_number,
+                includeSMSKeywords=include_sms)
         except WebFault as e:
             raise BrontoException(e.message)
         return response
@@ -325,7 +323,6 @@ class Client(object):
         except:
             return contact.results
 
-
     def add_or_update_contact(self, contact):
         contact = self.add_or_update_contacts([contact, ])
         try:
@@ -443,7 +440,7 @@ class Client(object):
         for field in fields:
             if not all(key in field for key in required_attributes):
                 raise ValueError('The attributes %s are required.'
-                        % required_attributes)
+                                 % required_attributes)
             field_obj = self._client.factory.create('fieldObject')
             for attribute, value in six.iteritems(field):
                 if attribute not in self._valid_field_fields:
@@ -473,7 +470,7 @@ class Client(object):
             return request.results
 
     def get_fields(self, field_names=[]):
-        #TODO: Support search per field_id
+        # TODO: Support search per field_id
         final_fields = []
         cached = []
         filter_operator = self._client.factory.create('filterOperator')
@@ -550,7 +547,7 @@ class Client(object):
         """
         required_attributes = ['name', 'label']
         final_lists = []
-        for list_ in lists: # Use list_ as list is a built-in object
+        for list_ in lists:  # Use list_ as list is a built-in object
             if not all(key in list_ for key in required_attributes):
                 raise ValueError('The attributes %s are required.'
                                  % required_attributes)
@@ -583,7 +580,7 @@ class Client(object):
             return request.results
 
     def get_lists(self, list_names=[]):
-        #TODO: Support search per list_id
+        # TODO: Support search per list_id
         final_lists = []
         cached = []
         filter_operator = self._client.factory.create('filterOperator')
@@ -597,7 +594,7 @@ class Client(object):
                 list_string.value = list_name
                 final_lists.append(list_string)
 
-        if list_names and not final_lists: # if we already have all the lists
+        if list_names and not final_lists:  # if we already have all the lists
             return [self._cached_lists.get(name) for name in list_names]
 
         list_filter = self._client.factory.create('mailListFilter')
@@ -651,7 +648,6 @@ class Client(object):
         except:
             return response.results
 
-
     def add_contacts_to_list(self, list_, contacts):
         """
         The list must have either an id or a name defined.
@@ -667,7 +663,7 @@ class Client(object):
 
         if not any(key in list_ for key in valid_list_attributes):
             raise ValueError('Must provide either a name '
-                    'or id for your lists.')
+                             'or id for your lists.')
         final_list = self._client.factory.create('mailListObject')
         for attribute in valid_list_attributes:
             if attribute in list_:
@@ -677,7 +673,7 @@ class Client(object):
         for contact in contacts:
             if not any(key in contact for key in valid_contact_attributes):
                 raise ValueError('Must provide either an email '
-                        'or id for your contacts.')
+                                 'or id for your contacts.')
             contact_obj = self._client.factory.create('contactObject')
             for attribute in valid_contact_attributes:
                 if attribute in contact:
@@ -685,15 +681,15 @@ class Client(object):
             final_contacts.append(contact_obj)
         try:
             response = self._client.service.addToList(final_list,
-                    final_contacts)
+                                                      final_contacts)
 
             if hasattr(response, 'errors'):
                 err_str = ', '.join(['%s: %s' % (response.results[x].errorCode,
                                                  response.results[x].errorString)
                                      for x in response.errors])
                 raise BrontoException(
-                        'An error occurred while adding contacts to a list: %s'
-                        % err_str)
+                    'An error occurred while adding contacts to a list: %s'
+                    % err_str)
             # If no error we force to refresh the fields' cache
             self._cached_all_fields = False
         except WebFault as e:
@@ -705,14 +701,14 @@ class Client(object):
         Add one contact to one list
 
         """
-        request = self.add_contacts_to_list(list_, [contact,])
+        request = self.add_contacts_to_list(list_, [contact, ])
         try:
             return request.results[0]
         except:
             return request.results
 
     def get_messages(self, message_names=[], include_transactional=False):
-        #TODO: Support search per message_id
+        # TODO: Support search per message_id
         final_messages = []
         cached = []
         filter_operator = self._client.factory.create('filterOperator')
@@ -726,7 +722,7 @@ class Client(object):
                 message_string.value = message_name
                 final_messages.append(message_string)
 
-        if message_names and not final_messages: # if we already have all the messages
+        if message_names and not final_messages:  # if we already have all the messages
             return [self._cached_messages.get(name) for name in message_names]
 
         message_filter = self._client.factory.create('messageFilter')
@@ -792,8 +788,8 @@ class Client(object):
         For more details: http://dev.bronto.com/api/v4/data-format
         """
         required_attributes = ['start', 'messageId', 'type', 'fromEmail',
-                #'replyEmail', Even if the doc says so, it's not required
-                'fromName', 'recipients']
+                               # 'replyEmail', Even if the doc says so, it's not required
+                               'fromName', 'recipients']
         final_deliveries = []
         for delivery in deliveries:
             if not all(key in delivery for key in required_attributes):
@@ -844,7 +840,6 @@ class Client(object):
         if workflows and not final_workflows:
             return [self._cached_workflows.get(workflow) for workflow in workflows]
 
-
         workflow_filter = self._client.factory.create('workflowFilter')
         workflow_filter.name = final_workflows
         filter_type = self._client.factory.create('filterType')
@@ -866,6 +861,7 @@ class Client(object):
             else:
                 response = []
         return response + cached
+
     def get_workflow(self, workflow):
         """
         workflow: {'id':'myworkflowid','name':'name'} can search by name or by ID
@@ -875,12 +871,14 @@ class Client(object):
             return request[0]
         except:
             return request.results
+
     def get_workflow_by_id(self, id):
         request = self.get_workflows_by_id([id])
         try:
             return request[0]
         except:
             return []
+
     def get_workflows_by_id(self, ids):
         """
 
@@ -892,7 +890,8 @@ class Client(object):
         workflow_results = []
         response = []
         if not self._cached_all_workflows:
-            workflow_results = [workflow for name, workflow in self._cached_workflows.iteritems() if getattr(workflow, 'id', None) in ids]
+            workflow_results = [workflow for name, workflow in self._cached_workflows.iteritems() if
+                                getattr(workflow, 'id', None) in ids]
             if len(ids) == len(workflow_results):
                 return workflow_results
             try:
@@ -902,11 +901,12 @@ class Client(object):
             except WebFault as e:
                 raise BrontoException(e.message)
         else:
-            workflow_results = [workflow for name, workflow in self._cached_workflows.iteritems() if getattr(workflow, 'id', None) in ids]
+            workflow_results = [workflow for name, workflow in self._cached_workflows.iteritems() if
+                                getattr(workflow, 'id', None) in ids]
         return workflow_results + response
 
+        # return [self._cached_workflows.get(workflow.name) for workflow in self._cached_workflows.items() if workflow.id in ids]
 
-            # return [self._cached_workflows.get(workflow.name) for workflow in self._cached_workflows.items() if workflow.id in ids]
     def add_contacts_to_workflow(self, email, workflow_id):
         workflow = self._client.factory.create('workflowObject')
         contact = self._client.factory.create('contactObject')
@@ -917,4 +917,3 @@ class Client(object):
         except WebFault as e:
             raise BrontoException(e.message)
         return response
-

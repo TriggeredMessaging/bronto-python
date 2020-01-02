@@ -7,13 +7,13 @@ import bronto
 os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
 VERSION = bronto.__version__
-github_url = 'http://github.com/Scotts-Marketplace/bronto-python/'
+github_url = 'https://github.com/TriggeredMessaging/bronto-python.git'
 requires = ['suds-jurko', 'six']
 
 setup(name='bronto-python',
       version=VERSION,
-      author='Joey Wilhelm',
-      author_email='joey@scottsmarketplace.com',
+      author='Fresh Relevance',
+      author_email='hello@freshrelevance.com',
       license='Apache',
       url=github_url,
       download_url='%sarchive/%s.tar.gz' % (github_url, VERSION),
