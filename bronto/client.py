@@ -1,18 +1,31 @@
+import re
+
 import six
-from suds import WebFault
 import suds.client
+from suds import WebFault
 
 API_ENDPOINT = 'https://api.bronto.com/v4?wsdl'
 
+class BrontoException(Exception):
+    def __init__(self, message, code=None):
+        # try extract the status code with regex
+        if not code:
+            code = re.search('\d{3}', message)
+            try:
+                code = int(message[code.regs[0][0]:code.regs[0][1]])
+            except Exception as e:
+                code = None
+        self.message = message
+        self.code = code
 
-class BrontoError(Exception):
-    pass
+
 
 
 class Client(object):
     _valid_contact_fields = ['email', 'mobileNumber', 'status', 'msgPref',
                              'source', 'customSource', 'listIds', 'fields',
-                             'SMSKeywordIDs']
+                             'SMSKeywordIDs',] #'first_name', 'last_name', 'cart_html']
+
     _valid_order_fields = ['id', 'email', 'contactId', 'products', 'orderDate',
                            'tid']
     _valid_product_fields = ['id', 'sku', 'name', 'description', 'category',
@@ -33,6 +46,9 @@ class Client(object):
     _cached_messages = {}
     _cached_all_messages = False
 
+    _cached_workflows = {}
+    _cached_all_workflows = False
+
     def __init__(self, token, **kwargs):
         if not token or not isinstance(token, six.string_types):
             raise ValueError('Must supply a token as a non empty string.')
@@ -40,15 +56,24 @@ class Client(object):
         self._token = token
         self._client = None
 
+    def update_contact_fields(self, merge_vars):
+        if isinstance(merge_vars, dict):
+            temp = self._valid_contact_fields
+            for var in merge_vars.keys():
+                if var not in temp:
+                    temp.append(var)
+            self._valid_contact_fields = temp
+
     def login(self):
         self._client = suds.client.Client(API_ENDPOINT)
+        self._client.set_options(timeout=25)
         try:
             self.session_id = self._client.service.login(self._token)
             session_header = self._client.factory.create('sessionHeader')
             session_header.sessionId = self.session_id
             self._client.set_options(soapheaders=session_header)
         except WebFault as e:
-            raise BrontoError(e.message)
+            raise BrontoException(e.message)
 
     def _construct_contact_fields(self, fields):
         final_fields = []
@@ -58,15 +83,15 @@ class Client(object):
                 real_field = list(filter(lambda x: x.name == field_key,
                                          real_fields))[0]
             except IndexError:
-                raise BrontoError('Invalid contactField: %s' %
-                                  field_key)
+                raise BrontoException('Invalid contactField: %s' %
+                                      field_key)
             field_object = self._client.factory.create('contactField')
             field_object.fieldId = real_field.id
             field_object.content = field_val
             final_fields.append(field_object)
         return final_fields
 
-    def add_contacts(self, contacts):
+    def add_contacts(self, contacts, list_id=None):
         final_contacts = []
         for contact in contacts:
             if not any([contact.get('email'), contact.get('mobileNumber')]):
@@ -81,6 +106,8 @@ class Client(object):
                     raise KeyError('Invalid contact attribute: %s' % field)
                 else:
                     setattr(contact_obj, field, value)
+            contact_obj.listIds = list_id
+            contact_obj.status = 'onboarding'
             final_contacts.append(contact_obj)
         try:
             response = self._client.service.addContacts(final_contacts)
@@ -88,18 +115,45 @@ class Client(object):
                 err_str = ', '.join(['%s: %s' % (response.results[x].errorCode,
                                                  response.results[x].errorString)
                                      for x in response.errors])
-                raise BrontoError('An error occurred while adding contacts: %s'
-                                  % err_str)
+                err_code = response.results[0].errorCode
+                raise BrontoException('An error occurred while adding contacts: %s'
+                                      % err_str, err_code)
         except WebFault as e:
-            raise BrontoError(e.message)
+            raise BrontoException(e.message)
         return response
 
-    def add_contact(self, contact):
-        contact = self.add_contacts([contact, ])
+    def add_contact(self, contact, list_id=None):
+        contact = self.add_contacts([contact, ], list_id)
         try:
             return contact.results[0]
         except:
             return contact.results
+
+    def get_contacts_by_list(self, list_id, status_filter=None, fields=None):
+        contact_filter = self._client.factory.create('contactFilter')
+        contact_filter.listId = list_id
+        if status_filter:
+            contact_filter.status = [status_val for status_val in status_filter]
+        contact_filter.type = self._client.factory.create('filterType').OR
+        try:
+            page_number = 1
+            process = True
+            all_contacts = []
+            while process:
+                response = self._client.service.readContacts(
+                    contact_filter,
+                    includeLists=True,
+                    pageNumber=page_number,
+                    fields=fields,
+                )
+                if len(response):
+                    all_contacts += response
+                    page_number += 1
+                else:
+                    process = False
+        except WebFault as e:
+            raise BrontoException(e.message)
+        return all_contacts
 
     def get_contacts(self, emails, include_lists=False, fields=[],
                      page_number=1, include_sms=False):
@@ -129,7 +183,7 @@ class Client(object):
                                              pageNumber=page_number,
                                              includeSMSKeywords=include_sms)
         except WebFault as e:
-            raise BrontoError(e.message)
+            raise BrontoException(e.message)
         return response
 
     def get_contact(self, email, include_lists=False, fields=[],
@@ -141,7 +195,7 @@ class Client(object):
         except:
             return contact
 
-    def update_contacts(self, contacts):
+    def update_contacts(self, contacts, status=None):
         """
         >>> client.update_contacts({'me@domain.com':
                                       {'mobileNumber': '1234567890',
@@ -163,7 +217,7 @@ class Client(object):
                 real_contact = list(filter(lambda x: x.email == email,
                                            contact_objs))[0]
             except IndexError:
-                raise BrontoError('Contact not found: %s' % email)
+                raise BrontoException('Contact not found: %s' % email)
             for field, value in six.iteritems(contact_info):
                 if field == 'fields':
                     field_objs = self._construct_contact_fields(value)
@@ -180,6 +234,8 @@ class Client(object):
                     raise KeyError('Invalid contact attribute: %s' % field)
                 else:
                     setattr(real_contact, field, value)
+            if status:
+                real_contact.status = status
             final_contacts.append(real_contact)
         try:
             response = self._client.service.updateContacts(final_contacts)
@@ -187,13 +243,13 @@ class Client(object):
                 err_str = ', '.join(['%s: %s' % (response.results[x].errorCode,
                                                  response.results[x].errorString)
                                      for x in response.errors])
-                raise BrontoError('An error occurred while adding contacts: %s'
-                                  % err_str)
+                raise BrontoException('An error occurred while adding contacts: %s'
+                                      % err_str)
         except WebFault as e:
-            raise BrontoError(e.message)
+            raise BrontoException(e.message)
         return response
 
-    def update_contact(self, email, contact_info):
+    def update_contact(self, email, contact_info, status):
         contact = self.update_contacts({email: contact_info})
         try:
             return contact.results[0]
@@ -224,11 +280,51 @@ class Client(object):
                 err_str = ', '.join(['%s: %s' % (response.results[x].errorCode,
                                                  response.results[x].errorString)
                                      for x in response.errors])
-                raise BrontoError('An error occurred while adding contacts: %s'
-                                  % err_str)
+                raise BrontoException('An error occurred while adding contacts: %s'
+                                      % err_str)
         except WebFault as e:
-            raise BrontoError(e.message)
+            raise BrontoException(e.message)
         return response
+
+    def add_or_update_contacts_incremental(self, contacts, list_id=None, status=None):
+        final_contacts = []
+        for contact in contacts:
+            if not any([contact.get('id'), contact.get('email'),
+                        contact.get('mobileNumber')]):
+                raise ValueError('Must provide one of: id, email, mobileNumber')
+            contact_obj = self._client.factory.create('contactObject')
+            for field, value in six.iteritems(contact):
+                if field == 'fields':
+                    field_objs = self._construct_contact_fields(value)
+                    contact_obj.fields = field_objs
+                elif field not in self._valid_contact_fields:
+                    raise KeyError('Invalid contact attribute: %s' % field)
+                else:
+                    setattr(contact_obj, field, value)
+            if list_id:
+                contact_obj.listIds = list_id
+            if status:
+                contact_obj.status = status
+            final_contacts.append(contact_obj)
+        try:
+            response = self._client.service.addOrUpdateContactsIncremental(final_contacts)
+            if hasattr(response, 'errors'):
+                err_str = ', '.join(['%s: %s' % (response.results[x].errorCode,
+                                                 response.results[x].errorString)
+                                     for x in response.errors])
+                raise BrontoException('An error occurred while adding contacts: %s'
+                                      % err_str)
+        except WebFault as e:
+            raise BrontoException(e.message)
+        return response
+
+    def add_or_update_contact_incremental(self, contact, list_id=None, status=None):
+        contact = self.add_or_update_contacts_incremental([contact, ], list_id, status)
+        try:
+            return contact.results[0]
+        except:
+            return contact.results
+
 
     def add_or_update_contact(self, contact):
         contact = self.add_or_update_contacts([contact, ])
@@ -242,7 +338,7 @@ class Client(object):
         try:
             response = self._client.service.deleteContacts(contacts)
         except WebFault as e:
-            raise BrontoError(e.message)
+            raise BrontoException(e.message)
         return response
 
     def delete_contact(self, email):
@@ -281,10 +377,10 @@ class Client(object):
                 err_str = ', '.join(['%s: %s' % (response.results[x].errorCode,
                                                  response.results[x].errorString)
                                      for x in response.errors])
-                raise BrontoError('An error occurred while adding orders: %s'
-                                  % err_str)
+                raise BrontoException('An error occurred while adding orders: %s'
+                                      % err_str)
         except WebFault as e:
-            raise BrontoError(e.message)
+            raise BrontoException(e.message)
         return response
 
     def add_order(self, order):
@@ -313,7 +409,7 @@ class Client(object):
         try:
             response = self._client.service.deleteOrders(orders)
         except WebFault as e:
-            raise BrontoError(e.message)
+            raise BrontoException(e.message)
         return response
 
     def delete_order(self, order_id):
@@ -361,12 +457,12 @@ class Client(object):
                 err_str = ', '.join(['%s: %s' % (response.results[x].errorCode,
                                                  response.results[x].errorString)
                                      for x in response.errors])
-                raise BrontoError('An error occurred while adding fields: %s'
-                                  % err_str)
+                raise BrontoException('An error occurred while adding fields: %s'
+                                      % err_str)
             # If no error we force to refresh the fields' cache
             self._cached_all_fields = False
         except WebFault as e:
-            raise BrontoError(e.message)
+            raise BrontoException(e.message)
         return response
 
     def add_field(self, field):
@@ -407,7 +503,7 @@ class Client(object):
                 if not len(final_fields):
                     self._cached_all_fields = True
             except WebFault as e:
-                raise BrontoError(e.message)
+                raise BrontoException(e.message)
         else:
             if not field_names:
                 response = [y for x, y in six.iteritems(self._cached_fields)]
@@ -431,7 +527,7 @@ class Client(object):
         try:
             response = self._client.service.deleteFields(fields)
         except WebFault as e:
-            raise BrontoError(e.message)
+            raise BrontoException(e.message)
         return response
 
     def delete_field(self, field_id):
@@ -471,12 +567,12 @@ class Client(object):
                 err_str = ', '.join(['%s: %s' % (response.results[x].errorCode,
                                                  response.results[x].errorString)
                                      for x in response.errors])
-                raise BrontoError('An error occurred while adding fields: %s'
-                                  % err_str)
+                raise BrontoException('An error occurred while adding fields: %s'
+                                      % err_str)
             # If no error we force to refresh the fields' cache
             self._cached_all_fields = False
         except WebFault as e:
-            raise BrontoError(e.message)
+            raise BrontoException(e.message)
         return response
 
     def add_list(self, list_):
@@ -521,7 +617,7 @@ class Client(object):
                 if not len(final_lists):
                     self._cached_all_lists = True
             except WebFault as e:
-                raise BrontoError(e.message)
+                raise BrontoException(e.message)
         else:
             if not list_names:
                 response = [y for x, y in six.iteritems(self._cached_lists)]
@@ -545,7 +641,7 @@ class Client(object):
         try:
             response = self._client.service.deleteLists(lists)
         except WebFault as e:
-            raise BrontoError(e.message)
+            raise BrontoException(e.message)
         return response
 
     def delete_list(self, list_id):
@@ -595,13 +691,13 @@ class Client(object):
                 err_str = ', '.join(['%s: %s' % (response.results[x].errorCode,
                                                  response.results[x].errorString)
                                      for x in response.errors])
-                raise BrontoError(
+                raise BrontoException(
                         'An error occurred while adding contacts to a list: %s'
                         % err_str)
             # If no error we force to refresh the fields' cache
             self._cached_all_fields = False
         except WebFault as e:
-            raise BrontoError(e.message)
+            raise BrontoException(e.message)
         return response
 
     def add_contact_to_list(self, list_, contact):
@@ -615,7 +711,7 @@ class Client(object):
         except:
             return request.results
 
-    def get_messages(self, message_names=[]):
+    def get_messages(self, message_names=[], include_transactional=False):
         #TODO: Support search per message_id
         final_messages = []
         cached = []
@@ -641,13 +737,14 @@ class Client(object):
         if not self._cached_all_messages:
             try:
                 response = self._client.service.readMessages(message_filter,
-                                                             pageNumber=1)
+                                                             pageNumber=1,
+                                                             includeTransactionalApproval=include_transactional)
                 for message in response:
                     self._cached_messages[message.name] = message
                 if not len(final_messages):
                     self._cached_all_messages = True
             except WebFault as e:
-                raise BrontoError(e.message)
+                raise BrontoException(e.message)
         else:
             if not message_names:
                 response = [y for x, y in six.iteritems(self._cached_messages)]
@@ -715,10 +812,10 @@ class Client(object):
                 err_str = ', '.join(['%s: %s' % (response.results[x].errorCode,
                                                  response.results[x].errorString)
                                      for x in response.errors])
-                raise BrontoError('An error occurred while adding deliveries: %s'
-                                  % err_str)
+                raise BrontoException('An error occurred while adding deliveries: %s'
+                                      % err_str)
         except WebFault as e:
-            raise BrontoError(e.message)
+            raise BrontoException(e.message)
         return response
 
     def add_delivery(self, delivery):
@@ -727,3 +824,97 @@ class Client(object):
             return request.results[0]
         except:
             return request.results
+
+    def get_workflows(self, workflows=[]):
+        """
+
+        """
+        final_workflows = []
+        cached = []
+        filter_operator = self._client.factory.create('filterOperator')
+        fop = filter_operator.EqualTo
+        for workflow in workflows:
+            if workflow in self._cached_workflows:
+                cached.append(self._cached_workflows[workflow])
+            else:
+                workflow_string = self._client.factory.create('stringValue')
+                workflow_string.operator = fop
+                workflow_string.value = workflow
+                final_workflows.append(workflow_string)
+        if workflows and not final_workflows:
+            return [self._cached_workflows.get(workflow) for workflow in workflows]
+
+
+        workflow_filter = self._client.factory.create('workflowFilter')
+        workflow_filter.name = final_workflows
+        filter_type = self._client.factory.create('filterType')
+        workflow_filter.type = filter_type.OR
+
+        if not self._cached_all_workflows:
+            try:
+                response = self._client.service.readWorkflows(workflow_filter,
+                                                              pageNumber=1)
+                for workflow in response:
+                    self._cached_workflows[workflow.name] = workflow
+                if not len(final_workflows):
+                    self._cached_all_workflows = True
+            except WebFault as e:
+                raise BrontoException(e.message)
+        else:
+            if not workflows:
+                response = [y for x, y in six.iteritems(self._cached_workflows)]
+            else:
+                response = []
+        return response + cached
+    def get_workflow(self, workflow):
+        """
+        workflow: {'id':'myworkflowid','name':'name'} can search by name or by ID
+        """
+        request = self.get_workflows([workflow, ])
+        try:
+            return request[0]
+        except:
+            return request.results
+    def get_workflow_by_id(self, id):
+        request = self.get_workflows_by_id([id])
+        try:
+            return request[0]
+        except:
+            return []
+    def get_workflows_by_id(self, ids):
+        """
+
+        """
+        workflow_filter = self._client.factory.create('workflowFilter')
+        workflow_filter.id = ids
+        filter_type = self._client.factory.create('filterType')
+        workflow_filter.type = filter_type.OR
+        workflow_results = []
+        response = []
+        if not self._cached_all_workflows:
+            workflow_results = [workflow for name, workflow in self._cached_workflows.iteritems() if getattr(workflow, 'id', None) in ids]
+            if len(ids) == len(workflow_results):
+                return workflow_results
+            try:
+                response = self._client.service.readWorkflows(filter=workflow_filter, pageNumber=1)
+                for workflow in response:
+                    self._cached_workflows[workflow.name] = workflow
+            except WebFault as e:
+                raise BrontoException(e.message)
+        else:
+            workflow_results = [workflow for name, workflow in self._cached_workflows.iteritems() if getattr(workflow, 'id', None) in ids]
+        return workflow_results + response
+
+
+            # return [self._cached_workflows.get(workflow.name) for workflow in self._cached_workflows.items() if workflow.id in ids]
+    def add_contacts_to_workflow(self, email, workflow_id):
+        workflow = self._client.factory.create('workflowObject')
+        contact = self._client.factory.create('contactObject')
+        workflow.id = workflow_id
+        contact.email = email
+        try:
+            response = self._client.service.addContactsToWorkflow(workflow, contact)
+        except WebFault as e:
+            raise BrontoException(e.message)
+        return response
+
