@@ -1,5 +1,0 @@
-include AUTHORS
-include CHANGELOG
-include LICENSE
-include README.rst
-prune build
