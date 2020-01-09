@@ -9,7 +9,6 @@ os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 VERSION = bronto.__version__
 github_url = 'http://github.com/Scotts-Marketplace/bronto-python/'
 requires = ['suds==0.4',
-            'suds-py3==1.3.3.0',
             'six']
 
 setup(name='bronto-python',
