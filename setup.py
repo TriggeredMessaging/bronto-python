@@ -8,8 +8,10 @@ os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
 VERSION = bronto.__version__
 github_url = 'https://github.com/TriggeredMessaging/bronto-python'
-requires = ['suds==0.4',
-            'six']
+requires = [
+    'suds-py3==1.3.3.0',
+    'six'
+]
 
 setup(name='bronto-python',
       version=VERSION,
@@ -34,5 +36,6 @@ setup(name='bronto-python',
            'Operating System :: OS Independent',
            'Programming Language :: Python',
            'Programming Language :: Python :: 2.7',
+           'Programming Language :: Python :: 3.7',
       ]
 )
