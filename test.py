@@ -25,7 +25,7 @@ class BrontoTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls._token = os.environ.get('BRONTO_API_KEY', '2D7F2547-A290-4B01-AE6B-391A92E1C5DD')
+        cls._token = os.environ.get('BRONTO_API_KEY', '')
         assert cls._token, 'You must set the BRONTO_API_KEY environment variable'
         cls._client = client.Client(cls._token)
         cls._client.login()
