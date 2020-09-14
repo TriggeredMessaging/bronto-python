@@ -10,6 +10,7 @@ VERSION = bronto.__version__
 github_url = 'https://github.com/TriggeredMessaging/bronto-python'
 requires = [
     'suds-py3==1.3.3.0',
+    'suds==0.4',
     'six'
 ]
 
