@@ -3,9 +3,11 @@
 import os
 import unittest
 import uuid
+from datetime import datetime
+
+import six
 
 from bronto import client
-from datetime import datetime
 
 
 class BrontoTest(unittest.TestCase):
@@ -32,7 +34,7 @@ class BrontoTest(unittest.TestCase):
         try:
             contact = self._client.add_contact(self.contact_info)
             self.assertIs(contact.isError, False)
-        except client.BrontoError:
+        except client.BrontoException:
             # Get the data from Bronto if the contact wasn't deleted in the
             # previous tests due to an error.
             self.contact_info = self._client.get_contact(self.contact_info['email'])
@@ -49,7 +51,7 @@ class TestFailures(unittest.TestCase):
             c = client.Client(None)
 
     def test_invalid_token(self):
-        with self.assertRaises(client.BrontoError):
+        with self.assertRaises(client.BrontoException):
             c = client.Client('invalid')
             c.login()
 
@@ -58,7 +60,7 @@ class BrontoContactTest(BrontoTest):
 
     def test_get_contact(self):
         contact = self._client.get_contact(self.contact_info['email'])
-        for key, val in self.contact_info.iteritems():
+        for key, val in six.iteritems(self.contact_info):
             if key != 'fields':
                 self.assertEqual(getattr(contact, key), val)
             else:
@@ -67,7 +69,7 @@ class BrontoContactTest(BrontoTest):
                 field_data = dict([(field_names[x.fieldId], x.content)
                                    for x in contact.fields if
                                    field_names[x.fieldId] in self.contact_info['fields']])
-                for fkey, fval in field_data.iteritems():
+                for fkey, fval in six.iteritems(field_data):
                     self.assertEqual(self.contact_info['fields'][fkey], fval)
 
     def test_add_contact_no_info(self):
@@ -75,7 +77,7 @@ class BrontoContactTest(BrontoTest):
             self._client.add_contacts([{}])
 
     def test_add_or_update_contacts(self):
-        new_mobile = '6025555555'
+        new_mobile = '447706573499' # Random UK mobile number (typed out randomly)
         new_firstname = 'Other'
         old_contact = self._client.get_contact(self.contact_info['email'])
         self._client.add_or_update_contact({'email': self.contact_info['email'],
@@ -94,13 +96,16 @@ class BrontoContactTest(BrontoTest):
         self._client.delete_contact(self.addl_contact_info['email'])
 
     def test_update_contact(self):
-        new_mobile = '6025555555'
+        new_mobile = '447706573499' # Random UK mobile number (typed out randomly)
         new_firstname = 'Other'
         old_contact = self._client.get_contact(self.contact_info['email'])
-        self._client.update_contact(self.contact_info['email'],
-                                    {'mobileNumber': new_mobile,
-                                     'fields': {'firstname': new_firstname}
-                                    })
+        self._client.update_contact(
+                email=self.contact_info['email'],
+                contact_info={
+                    'mobileNumber':new_mobile,
+                    'fields':{'firstname':new_firstname}
+                }
+        )
         contact = self._client.get_contact(self.contact_info['email'],
                                            fields=['firstname', ])
         self.assertEqual(old_contact.id, contact.id)
@@ -122,7 +127,7 @@ class BrontoFieldTest(BrontoTest):
             field = self._client.add_field(self.field_info)
             self.assertIs(field.isError, False)
             self.field_info['id'] = field['id']
-        except client.BrontoError:
+        except client.BrontoException:
             # Pull the field info from Bronto if previous failure in the tests
             self.field_info = self._client.get_field(self.field_info['name'])
 
@@ -132,7 +137,7 @@ class BrontoFieldTest(BrontoTest):
 
     def test_get_field(self):
         field = self._client.get_field(self.field_info['name'])
-        for key, val in self.field_info.iteritems():
+        for key, val in six.iteritems(self.field_info):
             self.assertEqual(getattr(field, key), val)
 
     def test_add_field_no_info(self):
@@ -213,7 +218,7 @@ class BrontoListTest(BrontoTest):
             list_ = self._client.add_list(self.list_info)
             self.assertIs(list_.isError, False)
             self.list_info['id'] = list_['id']
-        except client.BrontoError:
+        except client.BrontoException:
             # Pull the list id from Bronto if previous failure in the tests
             self.list_info = self._client.get_list(self.list_info['name'])
 
@@ -223,7 +228,7 @@ class BrontoListTest(BrontoTest):
 
     def test_get_list(self):
         list_ = self._client.get_list(self.list_info['name'])
-        for key, val in self.list_info.iteritems():
+        for key, val in six.iteritems(self.list_info):
             self.assertEqual(getattr(list_, key), val)
 
     def test_add_list_no_info(self):
@@ -278,7 +283,7 @@ class BrontoMessageTest(BrontoTest):
         message = self._client.get_message(self.message_info['name'])
         if not message:
             raise Exception("You need to create a message with the name bronto_api_test")
-        for key, val in self.message_info.iteritems():
+        for key, val in six.iteritems(self.message_info):
             self.assertEqual(getattr(message, key), val)
 
     def test_get_message_wrong_name(self):
@@ -290,7 +295,7 @@ class BrontoMessageTest(BrontoTest):
         if not messages:
             raise Exception("You need to create a message with the name bronto_api_test")
         self.assertEqual(len(messages), 1)
-        for key, val in self.message_info.iteritems():
+        for key, val in six.iteritems(self.message_info):
             self.assertEqual(getattr(messages[0], key), val)
 
 class BrontoDeliveryTest(BrontoTest):
@@ -304,7 +309,7 @@ class BrontoDeliveryTest(BrontoTest):
         try:
             recipient = self._client.add_contact(self.addl_contact_info)
             self.assertIs(recipient.isError, False)
-        except client.BrontoError:
+        except client.BrontoException:
             # Get the data from Bronto if the contact wasn't deleted in the
             # previous tests due to an error.
             self.addl_contact_info = self._client.get_contact(

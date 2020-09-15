@@ -73,7 +73,7 @@ class Client(object):
             session_header.sessionId = self.session_id
             self._client.set_options(soapheaders=session_header)
         except WebFault as e:
-            raise BrontoException(e.message)
+            raise BrontoException(six.text_type(e))
 
     def _construct_contact_fields(self, fields):
         final_fields = []
@@ -119,7 +119,7 @@ class Client(object):
                 raise BrontoException('An error occurred while adding contacts: %s'
                                       % err_str, err_code)
         except WebFault as e:
-            raise BrontoException(e.message)
+            raise BrontoException(six.text_type(e))
         return response
 
     def add_contact(self, contact, list_id=None):
@@ -152,7 +152,7 @@ class Client(object):
                 else:
                     process = False
         except WebFault as e:
-            raise BrontoException(e.message)
+            raise BrontoException(six.text_type(e))
         return all_contacts
 
     def get_contacts(self, emails, include_lists=False, fields=[],
@@ -183,7 +183,7 @@ class Client(object):
                                              pageNumber=page_number,
                                              includeSMSKeywords=include_sms)
         except WebFault as e:
-            raise BrontoException(e.message)
+            raise BrontoException(six.text_type(e))
         return response
 
     def get_contact(self, email, include_lists=False, fields=[],
@@ -246,10 +246,10 @@ class Client(object):
                 raise BrontoException('An error occurred while adding contacts: %s'
                                       % err_str)
         except WebFault as e:
-            raise BrontoException(e.message)
+            raise BrontoException(six.text_type(e))
         return response
 
-    def update_contact(self, email, contact_info, status):
+    def update_contact(self, email, contact_info):
         contact = self.update_contacts({email: contact_info})
         try:
             return contact.results[0]
@@ -283,7 +283,7 @@ class Client(object):
                 raise BrontoException('An error occurred while adding contacts: %s'
                                       % err_str)
         except WebFault as e:
-            raise BrontoException(e.message)
+            raise BrontoException(six.text_type(e))
         return response
 
     def add_or_update_contacts_incremental(self, contacts, list_id=None, status=None):
@@ -315,7 +315,7 @@ class Client(object):
                 raise BrontoException('An error occurred while adding contacts: %s'
                                       % err_str)
         except WebFault as e:
-            raise BrontoException(e.message)
+            raise BrontoException(six.text_type(e))
         return response
 
     def add_or_update_contact_incremental(self, contact, list_id=None, status=None):
@@ -338,7 +338,7 @@ class Client(object):
         try:
             response = self._client.service.deleteContacts(contacts)
         except WebFault as e:
-            raise BrontoException(e.message)
+            raise BrontoException(six.text_type(e))
         return response
 
     def delete_contact(self, email):
@@ -380,7 +380,7 @@ class Client(object):
                 raise BrontoException('An error occurred while adding orders: %s'
                                       % err_str)
         except WebFault as e:
-            raise BrontoException(e.message)
+            raise BrontoException(six.text_type(e))
         return response
 
     def add_order(self, order):
@@ -409,7 +409,7 @@ class Client(object):
         try:
             response = self._client.service.deleteOrders(orders)
         except WebFault as e:
-            raise BrontoException(e.message)
+            raise BrontoException(six.text_type(e))
         return response
 
     def delete_order(self, order_id):
@@ -462,7 +462,7 @@ class Client(object):
             # If no error we force to refresh the fields' cache
             self._cached_all_fields = False
         except WebFault as e:
-            raise BrontoException(e.message)
+            raise BrontoException(six.text_type(e))
         return response
 
     def add_field(self, field):
@@ -503,7 +503,7 @@ class Client(object):
                 if not len(final_fields):
                     self._cached_all_fields = True
             except WebFault as e:
-                raise BrontoException(e.message)
+                raise BrontoException(six.text_type(e))
         else:
             if not field_names:
                 response = [y for x, y in six.iteritems(self._cached_fields)]
@@ -527,7 +527,7 @@ class Client(object):
         try:
             response = self._client.service.deleteFields(fields)
         except WebFault as e:
-            raise BrontoException(e.message)
+            raise BrontoException(six.text_type(e))
         return response
 
     def delete_field(self, field_id):
@@ -572,7 +572,7 @@ class Client(object):
             # If no error we force to refresh the fields' cache
             self._cached_all_fields = False
         except WebFault as e:
-            raise BrontoException(e.message)
+            raise BrontoException(six.text_type(e))
         return response
 
     def add_list(self, list_):
@@ -617,7 +617,7 @@ class Client(object):
                 if not len(final_lists):
                     self._cached_all_lists = True
             except WebFault as e:
-                raise BrontoException(e.message)
+                raise BrontoException(six.text_type(e))
         else:
             if not list_names:
                 response = [y for x, y in six.iteritems(self._cached_lists)]
@@ -641,7 +641,7 @@ class Client(object):
         try:
             response = self._client.service.deleteLists(lists)
         except WebFault as e:
-            raise BrontoException(e.message)
+            raise BrontoException(six.text_type(e))
         return response
 
     def delete_list(self, list_id):
@@ -697,7 +697,7 @@ class Client(object):
             # If no error we force to refresh the fields' cache
             self._cached_all_fields = False
         except WebFault as e:
-            raise BrontoException(e.message)
+            raise BrontoException(six.text_type(e))
         return response
 
     def add_contact_to_list(self, list_, contact):
@@ -744,7 +744,7 @@ class Client(object):
                 if not len(final_messages):
                     self._cached_all_messages = True
             except WebFault as e:
-                raise BrontoException(e.message)
+                raise BrontoException(six.text_type(e))
         else:
             if not message_names:
                 response = [y for x, y in six.iteritems(self._cached_messages)]
@@ -815,7 +815,7 @@ class Client(object):
                 raise BrontoException('An error occurred while adding deliveries: %s'
                                       % err_str)
         except WebFault as e:
-            raise BrontoException(e.message)
+            raise BrontoException(six.text_type(e))
         return response
 
     def add_delivery(self, delivery):
@@ -859,7 +859,7 @@ class Client(object):
                 if not len(final_workflows):
                     self._cached_all_workflows = True
             except WebFault as e:
-                raise BrontoException(e.message)
+                raise BrontoException(six.text_type(e))
         else:
             if not workflows:
                 response = [y for x, y in six.iteritems(self._cached_workflows)]
@@ -900,7 +900,7 @@ class Client(object):
                 for workflow in response:
                     self._cached_workflows[workflow.name] = workflow
             except WebFault as e:
-                raise BrontoException(e.message)
+                raise BrontoException(six.text_type(e))
         else:
             workflow_results = [workflow for name, workflow in self._cached_workflows.iteritems() if getattr(workflow, 'id', None) in ids]
         return workflow_results + response
@@ -915,6 +915,6 @@ class Client(object):
         try:
             response = self._client.service.addContactsToWorkflow(workflow, contact)
         except WebFault as e:
-            raise BrontoException(e.message)
+            raise BrontoException(six.text_type(e))
         return response
 
